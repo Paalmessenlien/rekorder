@@ -2,3 +2,7 @@
 .~lock.*
 __pycache__/
 *.pyc
+# Playwright MCP test artifacts
+.playwright-mcp/
+test-*.png
+/tmp/_*.js

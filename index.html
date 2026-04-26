@@ -653,6 +653,7 @@
       </label>
       <label class="block text-xs text-gray-600">Rundetype
         <select x-model="lookup.rundeid"
+                x-init="$nextTick(() => { $el.value = lookup.rundeid; })"
                 class="mt-1 w-full px-3 py-3 sm:py-2 border border-line rounded text-ink">
           <template x-for="r in rundetyper" :key="r.id">
             <option :value="r.id" x-text="'(' + r.id + ') ' + r.navn"></option>
@@ -1208,9 +1209,14 @@ function app() {
     },
     get alleVisningTekst() {
       const list = this.filteredAlle;
+      const total = this.catalog.length;
       const showing = Math.min(list.length, this.visMaks);
       const note = list.length > this.visMaks ? ' (CSV gir full liste)' : '';
-      return 'Viser ' + showing + ' av ' + this.catalog.length + ' rekord-typer' + note;
+      // Når et filter er aktivt, vis treff-tall i stedet for total-tall.
+      if (list.length === total) {
+        return 'Viser ' + showing + ' av ' + total + ' rekord-typer' + note;
+      }
+      return 'Viser ' + showing + ' av ' + list.length + ' treff (av ' + total + ' totalt)' + note;
     },
 
     matchesRekorderFilters(r) {
@@ -1239,9 +1245,13 @@ function app() {
     },
     get rekorderVisningTekst() {
       const list = this.filteredRekorder;
+      const total = this.scraped.length;
       const showing = Math.min(list.length, this.visMaks);
       const note = list.length > this.visMaks ? ' (CSV gir full liste)' : '';
-      return 'Viser ' + showing + ' av ' + this.scraped.length + ' rekorder' + note;
+      if (list.length === total) {
+        return 'Viser ' + showing + ' av ' + total + ' rekorder' + note;
+      }
+      return 'Viser ' + showing + ' av ' + list.length + ' treff (av ' + total + ' totalt)' + note;
     },
 
     get tattCount() {
