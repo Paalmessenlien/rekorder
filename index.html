@@ -20,6 +20,7 @@
     }
   };
 </script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 <style>
   [x-cloak] { display: none !important; }
@@ -629,6 +630,155 @@
     </div>
   </section>
 
+  <!-- ============ STATISTIKK ============ -->
+  <section x-show="activeTab === 'stats'">
+    <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Statistikk</h2>
+    <p class="text-gray-600 mt-1 mb-4 max-w-prose text-sm sm:text-base">
+      Innsikt i de gjeldende rekordene — hva som er nytt, hva som har stått lengst, hvem som dominerer, og hvor i bueformatene aktiviteten er.
+    </p>
+
+    <template x-if="loading">
+      <div class="bg-white border border-line rounded-md p-4 text-sm text-gray-500">Laster rekord-data …</div>
+    </template>
+
+    <template x-if="!loading && !error">
+      <div>
+        <!-- Topp-kort -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-5">
+          <div class="bg-white border border-line rounded-md p-3">
+            <div class="text-[11px] uppercase tracking-wider text-accent font-semibold">Rekorder</div>
+            <div class="text-lg sm:text-xl font-semibold" x-text="scraped.length"></div>
+            <div class="text-xs text-gray-600">totalt</div>
+          </div>
+          <div class="bg-white border border-line rounded-md p-3">
+            <div class="text-[11px] uppercase tracking-wider text-accent font-semibold">Snitt-alder</div>
+            <div class="text-lg sm:text-xl font-semibold" x-text="statsSnittAlder.toFixed(1) + ' år'"></div>
+            <div class="text-xs text-gray-600">på gjeldende rekorder</div>
+          </div>
+          <div class="bg-white border border-line rounded-md p-3">
+            <div class="text-[11px] uppercase tracking-wider text-accent font-semibold">Eldste</div>
+            <div class="text-lg sm:text-xl font-semibold" x-text="statsOldestDate || '—'"></div>
+            <div class="text-xs text-gray-600">som fortsatt står</div>
+          </div>
+          <div class="bg-white border border-line rounded-md p-3">
+            <div class="text-[11px] uppercase tracking-wider text-accent font-semibold">Nyeste</div>
+            <div class="text-lg sm:text-xl font-semibold" x-text="statsLatestDate || '—'"></div>
+            <div class="text-xs text-gray-600">satt nylig</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <!-- Siste 20 -->
+          <div class="bg-white border border-line rounded-md overflow-hidden">
+            <div class="bg-gray-50 px-3 py-2 border-b border-line">
+              <h3 class="font-semibold text-sm">Siste 20 registrerte rekorder</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Sortert etter dato — hva som er nytt på site</p>
+            </div>
+            <ul class="divide-y divide-line text-sm">
+              <template x-for="r in statsLatest" :key="r.divisjon + '|' + r.klasse + '|' + r.rundeid + '|' + r.aspekt">
+                <li class="px-3 py-2 flex items-baseline gap-2">
+                  <span class="text-xs text-gray-500 tabular-nums w-20 flex-shrink-0" x-text="r.dato"></span>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium truncate" x-text="(r.navn || r.klubb || '—') + ' · ' + r.score"></div>
+                    <div class="text-xs text-gray-600 truncate" x-text="r.divisjon + ' · ' + r.klasse + ' · ' + r.rundenavn + ' · ' + r.aspekt"></div>
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </div>
+
+          <!-- Eldste 20 (lengst stående) -->
+          <div class="bg-white border border-line rounded-md overflow-hidden">
+            <div class="bg-gray-50 px-3 py-2 border-b border-line">
+              <h3 class="font-semibold text-sm">Lengst stående (eldste 20)</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Rekorder som ingen har slått enda</p>
+            </div>
+            <ul class="divide-y divide-line text-sm">
+              <template x-for="r in statsOldest" :key="r.divisjon + '|' + r.klasse + '|' + r.rundeid + '|' + r.aspekt">
+                <li class="px-3 py-2 flex items-baseline gap-2">
+                  <span class="text-xs text-gray-500 tabular-nums w-20 flex-shrink-0" x-text="r.dato"></span>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium truncate" x-text="(r.navn || r.klubb || '—') + ' · ' + r.score"></div>
+                    <div class="text-xs text-gray-600 truncate" x-text="r.divisjon + ' · ' + r.klasse + ' · ' + r.rundenavn + ' · ' + r.aspekt"></div>
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <!-- Topp innehavere -->
+          <div class="bg-white border border-line rounded-md overflow-hidden">
+            <div class="bg-gray-50 px-3 py-2 border-b border-line">
+              <h3 class="font-semibold text-sm">Topp 10 innehavere</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Skyttere med flest gjeldende rekorder</p>
+            </div>
+            <ul class="divide-y divide-line text-sm">
+              <template x-for="(t, i) in statsTopHolders" :key="t.key">
+                <li class="px-3 py-2">
+                  <div class="flex items-baseline gap-2">
+                    <span class="tabular-nums text-gray-400 text-xs w-5" x-text="i + 1"></span>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium truncate" x-text="t.navn"></div>
+                      <div class="text-xs text-gray-500 truncate" x-text="t.klubb"></div>
+                    </div>
+                    <span class="font-mono font-semibold tabular-nums text-sm" x-text="t.count"></span>
+                  </div>
+                  <div class="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-accent" :style="'width: ' + (t.count / statsTopHolders[0].count * 100) + '%'"></div>
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </div>
+
+          <!-- Topp klubber -->
+          <div class="bg-white border border-line rounded-md overflow-hidden">
+            <div class="bg-gray-50 px-3 py-2 border-b border-line">
+              <h3 class="font-semibold text-sm">Topp 10 klubber</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Klubber med flest rekorder (individuelle + lag)</p>
+            </div>
+            <ul class="divide-y divide-line text-sm">
+              <template x-for="(t, i) in statsTopClubs" :key="t.klubb">
+                <li class="px-3 py-2">
+                  <div class="flex items-baseline gap-2">
+                    <span class="tabular-nums text-gray-400 text-xs w-5" x-text="i + 1"></span>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium truncate" x-text="t.klubb"></div>
+                    </div>
+                    <span class="font-mono font-semibold tabular-nums text-sm" x-text="t.count"></span>
+                  </div>
+                  <div class="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full" style="background:#1c4faa" :style="'width: ' + (t.count / statsTopClubs[0].count * 100) + '%; background:#1c4faa'"></div>
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Aldring per divisjon -->
+        <div class="bg-white border border-line rounded-md p-4 mb-5">
+          <h3 class="font-semibold text-sm">Aldring per divisjon</h3>
+          <p class="text-xs text-gray-500 mt-0.5 mb-3">Median alder (i år) på gjeldende rekorder. Høy verdi = lite aktivitet, mange gamle rekorder.</p>
+          <div class="relative h-64">
+            <canvas id="chart-alder"></canvas>
+          </div>
+        </div>
+
+        <!-- Distribusjon per tiår -->
+        <div class="bg-white border border-line rounded-md p-4 mb-5">
+          <h3 class="font-semibold text-sm">Distribusjon per tiår</h3>
+          <p class="text-xs text-gray-500 mt-0.5 mb-3">Antall rekorder satt per tiår — viser når aktiviteten har vært høyest.</p>
+          <div class="relative h-64">
+            <canvas id="chart-tiar"></canvas>
+          </div>
+        </div>
+      </div>
+    </template>
+  </section>
+
   <!-- ============ SLÅ OPP ============ -->
   <section x-show="activeTab === 'slaopp'">
     <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Slå opp</h2>
@@ -1132,6 +1282,7 @@ function app() {
       { id: 'avstandstabell', label: 'Avstandstabell' },
       { id: 'alle', label: 'Alle rekord-typer' },
       { id: 'rekorder', label: 'Rekorder' },
+      { id: 'stats', label: 'Statistikk' },
       { id: 'slaopp', label: 'Slå opp' }
     ],
     // Filtre
@@ -1145,6 +1296,8 @@ function app() {
     // Eksponer data + helpers til templates
     divisjoner, rundetyper, avstandstabell,
     klasseGruppe,
+
+    _chartsRendered: false,
 
     async init() {
       this.catalog = genererAlleRekordTyper();
@@ -1164,6 +1317,12 @@ function app() {
       } finally {
         this.loading = false;
       }
+      // Render charts første gang Statistikk-fanen vises (Chart.js trenger synlig canvas)
+      this.$watch('activeTab', (val) => {
+        if (val === 'stats' && !this._chartsRendered && !this.loading && !this.error) {
+          this.$nextTick(() => this.renderStatsCharts());
+        }
+      });
     },
 
     klasserFor(divId) {
@@ -1335,6 +1494,145 @@ function app() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    },
+
+    /* ---------- STATISTIKK ---------- */
+
+    get _statsWithDate() {
+      return this.scraped.filter(r => r.dato);
+    },
+    get statsLatest() {
+      return [...this._statsWithDate].sort((a, b) => b.dato.localeCompare(a.dato)).slice(0, 20);
+    },
+    get statsOldest() {
+      return [...this._statsWithDate].sort((a, b) => a.dato.localeCompare(b.dato)).slice(0, 20);
+    },
+    get statsLatestDate() {
+      const r = this.statsLatest[0];
+      return r ? r.dato : null;
+    },
+    get statsOldestDate() {
+      const r = this.statsOldest[0];
+      return r ? r.dato : null;
+    },
+    get statsSnittAlder() {
+      const today = new Date();
+      const ages = [];
+      for (const r of this._statsWithDate) {
+        const d = new Date(r.dato);
+        if (isNaN(d)) continue;
+        ages.push((today - d) / (365.25 * 24 * 3600 * 1000));
+      }
+      return ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0;
+    },
+    get statsTopHolders() {
+      const counts = new Map();
+      for (const r of this.scraped) {
+        if (!r.navn) continue;
+        const key = r.navn + '|' + (r.klubb || '');
+        const cur = counts.get(key) || { key, navn: r.navn, klubb: r.klubb || '', count: 0 };
+        cur.count++;
+        counts.set(key, cur);
+      }
+      return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+    },
+    get statsTopClubs() {
+      const counts = new Map();
+      for (const r of this.scraped) {
+        if (!r.klubb) continue;
+        counts.set(r.klubb, (counts.get(r.klubb) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([klubb, count]) => ({ klubb, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    },
+    get statsAlderPerDivisjon() {
+      const today = new Date();
+      const byDiv = {};
+      for (const r of this._statsWithDate) {
+        const d = new Date(r.dato);
+        if (isNaN(d)) continue;
+        const yrs = (today - d) / (365.25 * 24 * 3600 * 1000);
+        if (!byDiv[r.divisjon]) byDiv[r.divisjon] = [];
+        byDiv[r.divisjon].push(yrs);
+      }
+      const out = [];
+      for (const div of Object.keys(byDiv)) {
+        const ages = byDiv[div].sort((a, b) => a - b);
+        const median = ages[Math.floor(ages.length / 2)];
+        out.push({ divisjon: div, median, count: ages.length });
+      }
+      return out.sort((a, b) => b.median - a.median);
+    },
+    get statsDecadeDistribution() {
+      const counts = new Map();
+      for (const r of this._statsWithDate) {
+        const year = parseInt(r.dato.slice(0, 4), 10);
+        if (isNaN(year)) continue;
+        const decade = Math.floor(year / 10) * 10;
+        counts.set(decade, (counts.get(decade) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([decade, count]) => ({ label: decade + '-tallet', count }));
+    },
+
+    renderStatsCharts() {
+      if (typeof Chart === 'undefined') {
+        console.warn('Chart.js ikke lastet — diagrammer hoppes over');
+        return;
+      }
+      this._chartsRendered = true;
+
+      const alder = this.statsAlderPerDivisjon;
+      const ctx1 = document.getElementById('chart-alder');
+      if (ctx1) {
+        new Chart(ctx1, {
+          type: 'bar',
+          data: {
+            labels: alder.map(s => s.divisjon),
+            datasets: [{
+              label: 'Median alder (år)',
+              data: alder.map(s => +s.median.toFixed(1)),
+              backgroundColor: '#b22a2a',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'år' } },
+              x: { ticks: { autoSkip: false, maxRotation: 30, minRotation: 0 } }
+            }
+          }
+        });
+      }
+
+      const tiar = this.statsDecadeDistribution;
+      const ctx2 = document.getElementById('chart-tiar');
+      if (ctx2) {
+        new Chart(ctx2, {
+          type: 'bar',
+          data: {
+            labels: tiar.map(s => s.label),
+            datasets: [{
+              label: 'Antall rekorder satt',
+              data: tiar.map(s => s.count),
+              backgroundColor: '#1c4faa',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'antall' } }
+            }
+          }
+        });
+      }
     }
   };
 }
