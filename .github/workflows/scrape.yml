@@ -34,8 +34,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet rekorder.csv rekorder-meta.json; then
+          # Hopp over commit hvis rekorder.csv er uendret —
+          # rekorder-meta.json bumper bare tidsstempel og er ikke verdt egen commit.
+          if git diff --quiet rekorder.csv; then
             echo "Ingen endringer i rekorder.csv — hopper over commit."
+            git checkout -- rekorder-meta.json 2>/dev/null || true
             exit 0
           fi
           git add rekorder.csv rekorder-meta.json
