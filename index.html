@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBF Rekord-typer</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #6b6b6b;
+    --line: #e3e3df;
+    --accent: #b22a2a;
+    --accent-soft: #f5dada;
+    --good: #2e7d32;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  code { font: 13px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: #efeee9; padding: 1px 5px; border-radius: 3px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header {
+    background: var(--ink);
+    color: #f7f7f5;
+    padding: 28px 32px 22px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  header .subtitle { margin: 0; font-size: 14px; color: #cfcfcb; }
+  header .snapshot { margin: 6px 0 0; font-size: 12px; color: #9d9d99; }
+
+  nav.tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap;
+  }
+  nav.tabs button {
+    background: transparent;
+    border: 0;
+    padding: 14px 16px;
+    font: inherit; color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+
+  h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.01em; }
+  h3 { margin: 22px 0 8px; font-size: 16px; }
+  p.lead { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 8px 0 18px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+    vertical-align: top;
+  }
+  th { background: #fafaf7; font-weight: 600; color: #444; }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: #fbfbf8; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.muted { color: var(--muted); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  .card strong { display: block; font-size: 13px; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .big { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+
+  form#lookup-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  form#lookup-form label { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); gap: 4px; }
+  form#lookup-form select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); }
+
+  #lookup-result {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 20px;
+  }
+  #lookup-result .row { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  #lookup-result .row:last-child { border-bottom: 0; }
+  #lookup-result .label { width: 160px; color: var(--muted); flex-shrink: 0; font-size: 13px; }
+  #lookup-result .val { flex: 1; }
+  #lookup-result .pill { display: inline-block; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; font-size: 12px; margin-right: 4px; }
+  #lookup-result .pill.dist { background: #e6f0ff; color: #1c4faa; }
+  #lookup-result .pill.skive { background: #f0eadf; color: #7a5a1c; }
+  #lookup-result .pill.source { background: #e3f3e6; color: var(--good); }
+  #lookup-result .note { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  #lookup-result a.gourl { word-break: break-all; }
+
+  ul { margin: 8px 0 14px; padding-left: 22px; }
+  ol { margin: 8px 0 14px; padding-left: 22px; }
+  ol li, ul li { margin: 4px 0; }
+
+  footer { padding: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; background: var(--surface); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NBF Rekord-typer</h1>
+  <p class="subtitle">Kart over rekord-typer på <a href="https://rekord.bueskyting.no/" style="color:#f7d4d4">rekord.bueskyting.no</a>, koblet til <em>Avstandstabell-mesterskap-skive</em> (NBF, 2024-11)</p>
+  <p class="snapshot">Snapshot: 2026-04-25</p>
+</header>
+
+<nav class="tabs" id="tabnav">
+  <button data-tab="oversikt" class="active">Oversikt</button>
+  <button data-tab="divisjoner">Divisjoner</button>
+  <button data-tab="rundetyper">Rundetyper</button>
+  <button data-tab="klasser">Klasser</button>
+  <button data-tab="avstandstabell">Avstandstabell</button>
+  <button data-tab="alle">Alle rekord-typer</button>
+  <button data-tab="slaopp">Slå opp</button>
+</nav>
+
+<main>
+
+  <section id="oversikt" class="tab active">
+    <h2>Oversikt</h2>
+    <p class="lead">En rekord på rekord.bueskyting.no identifiseres av <strong>fem akser</strong>. Tabellen er konkurransereferansen: hvilken avstand og skive klassen skyter mot i NM (innendørs og skive/utendørs).</p>
+    <div class="cards">
+      <div class="card"><strong>Akser</strong><div class="big">5</div>Divisjon · Klasse · Rundetype · Avstand · Skive</div>
+      <div class="card"><strong>Divisjoner</strong><div class="big">7</div>5 standard + Synshemmede + Psyk.utv.hem.</div>
+      <div class="card"><strong>Rundetyper</strong><div class="big">10</div>7 utendørs + 3 innendørs</div>
+      <div class="card"><strong>Kombinasjoner</strong><div class="big">70</div>Alle (rundeid × divisjon) publiseres</div>
+    </div>
+    <h3>Hvordan dokumentet er strukturert</h3>
+    <ul>
+      <li><a href="#" data-go="divisjoner">Divisjoner</a> — bueformat på site og PDF</li>
+      <li><a href="#" data-go="rundetyper">Rundetyper</a> — alle 10 runder med <code>rundeid</code>, antall piler og format</li>
+      <li><a href="#" data-go="klasser">Klasser</a> — standardsett (10 ind. + 5 Mix2 + 5 Lag) og felles-klasser</li>
+      <li><a href="#" data-go="avstandstabell">Avstandstabell</a> — PDF reprodusert som tabell, med fotnoter</li>
+      <li><a href="#" data-go="slaopp">Slå opp</a> — velg divisjon × klasse × rundetype → ser avstand, skive og PDF-mapping</li>
+    </ul>
+  </section>
+
+  <section id="divisjoner" class="tab">
+    <h2>Divisjoner</h2>
+    <p class="lead">Bueformat. URL-parameter <code>divisjon=</code> på rekord-sidene. Spesialdivisjonene Synshemmede og PsykiskUtviklingshemmet har egen klassestruktur (Felles + Lag).</p>
+    <table id="divisjoner-table">
+      <thead><tr><th>Site-label (URL)</th><th>PDF-label</th><th>Klassesett</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="rundetyper" class="tab">
+    <h2>Rundetyper</h2>
+    <p class="lead">Alle 10 rundetyper. <code>rundeid</code> er URL-parameteren. Lenken viser Recurve-rekordene for runden — bytt <code>divisjon</code> i URL-en for andre divisjoner.</p>
+    <table id="rundetyper-table">
+      <thead><tr><th class="num">rundeid</th><th>Navn</th><th>Inne / Ute</th><th class="num">Piler</th><th>Format</th><th>Lenke</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="klasser" class="tab">
+    <h2>Klasser</h2>
+
+    <h3>Standard klassesett</h3>
+    <p class="lead">Brukes av Recurve, Compound, Barebow, Langbue og Tradisjonell.</p>
+    <table>
+      <thead><tr><th>Gruppe</th><th>Klasser</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Individuelt</strong></td><td>Damer Senior · Herrer Senior · Damer 50 · Herrer 50 · Damer U21 · Herrer U21 · Damer U18 · Herrer U18 · Jenter U16 · Gutter U16</td></tr>
+        <tr><td><strong>Mix2 (parlag)</strong></td><td>Mix2 Senior · Mix2 50+ · Mix2 U21 · Mix2 U18 · Mix2 U16</td></tr>
+        <tr><td><strong>Lag</strong></td><td>Én lagrekord per individuell klasse (utendørs runder; også enkelte innendørs)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Felles-klasser</h3>
+    <p class="lead">Brukes av Synshemmede og PsykiskUtviklingshemmet.</p>
+    <table>
+      <thead><tr><th>Gruppe</th><th>Klasse</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Individuelt</strong></td><td>Felles (kombinert, ikke kjønnsdelt)</td></tr>
+        <tr><td><strong>Lag</strong></td><td>Lag</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Konvensjoner</h3>
+    <ul>
+      <li>Mix2 finnes kun for de fem standarddivisjonene, men på samtlige rundetyper.</li>
+      <li>BB, Trad og LB <em>U18</em> kan sette rekord i egen klasse <em>eller</em> i alderstrinnet over (jf. PDF-fotnote).</li>
+      <li>Mix2- og Lag-rekorder lagres som aggregert skår — ikke per delavstand.</li>
+      <li>Recurve Damer Senior/U21 har en egen <strong>Total 90 m</strong>-rekord på 1440-siden (delskår).</li>
+    </ul>
+  </section>
+
+  <section id="avstandstabell" class="tab">
+    <h2>Avstandstabell — mesterskap, skive (2024-11)</h2>
+    <p class="lead">Reproduksjon av PDF-tabellen som definerer hvilken avstand og skive hver klasse skal bruke i NM <em>innendørs</em> og <em>skive/utendørs</em>.</p>
+    <table id="avstandstabell-table">
+      <thead><tr><th>Divisjon</th><th>Betegnelse</th><th>Inne avstand</th><th>Inne skive</th><th>Ute avstand</th><th>Ute skive</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h3>Fotnoter</h3>
+    <ol>
+      <li>Alle, foruten Tradisjonell, Langbue, W1 og OC, skyter trippel-skiver i match- og finalerunder.</li>
+      <li>Recurve Senior, 50+, U21 og U18 kan velge mellom full- eller trippelskive innledningsvis.</li>
+      <li>Barebow Senior kan velge mellom full- eller trippelskive innledningsvis.</li>
+      <li>BB, Trad og LB U18 kan sette rekord i egen aldersbestemt klasse, eventuelt i alderstrinnet over dersom skytter deltar i denne klassen.</li>
+    </ol>
+  </section>
+
+  <section id="alle" class="tab">
+    <h2>Alle rekord-typer</h2>
+    <p class="lead">Den fullstendige enumerasjonen — hver rad er én rekord-type som <em>kan</em> registreres på rekord.bueskyting.no, identifisert av (divisjon × klasse × rundetype × aspekt). Filtrer fritt, eller last ned som CSV.</p>
+
+    <div class="cards" id="alle-summary"></div>
+
+    <form id="alle-filter" autocomplete="off">
+      <label>Divisjon
+        <select id="f-divisjon"><option value="">Alle</option></select>
+      </label>
+      <label>Rundetype
+        <select id="f-rundeid"><option value="">Alle</option></select>
+      </label>
+      <label>Klasse-gruppe
+        <select id="f-gruppe">
+          <option value="">Alle</option>
+          <option value="ind">Individuelt</option>
+          <option value="mix2">Mix2</option>
+          <option value="lag">Lag</option>
+          <option value="felles">Felles (W1/OC)</option>
+        </select>
+      </label>
+      <label>Søk i klasse
+        <input id="f-sok" type="search" placeholder="f.eks. Senior, U18, …">
+      </label>
+    </form>
+
+    <div style="display:flex; align-items:center; gap:14px; margin: 4px 0 12px;">
+      <span id="alle-count" class="muted" style="font-size:13px;"></span>
+      <button id="alle-csv" type="button" style="margin-left:auto; font:inherit; padding:8px 14px; border:1px solid var(--line); border-radius:4px; background:var(--surface); cursor:pointer;">Last ned CSV</button>
+    </div>
+
+    <table id="alle-table">
+      <thead><tr><th class="num">#</th><th>Divisjon</th><th>Klasse</th><th>Rundetype</th><th>Aspekt</th><th>Avstand</th><th>Skive</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="muted" style="font-size:13px">
+      Notater: Lag er modellert kjønnsdelt (10 lagklasser per standard divisjon). På <code>rundeid=22</code> publiseres lagrekorder ofte kombinert (5 klasser per divisjon) — radene her er en øvre grense.
+      Mix2 og Lag på multi-avstandsrunder er ren lagskår (ingen delavstands-rekorder).
+    </p>
+  </section>
+
+  <section id="slaopp" class="tab">
+    <h2>Slå opp</h2>
+    <p class="lead">Velg divisjon, klasse og rundetype. Verktøyet viser avstand(er), skive og hvor informasjonen kommer fra (PDF eller site).</p>
+    <form id="lookup-form" autocomplete="off">
+      <label>Divisjon
+        <select id="sel-divisjon"></select>
+      </label>
+      <label>Klasse
+        <select id="sel-klasse"></select>
+      </label>
+      <label>Rundetype
+        <select id="sel-rundeid"></select>
+      </label>
+    </form>
+    <div id="lookup-result"></div>
+  </section>
+
+</main>
+
+<footer>
+  Data: <a href="https://rekord.bueskyting.no/">rekord.bueskyting.no</a> · <em>Avstandstabell-mesterskap-skive-2024-11.pdf</em> (NBF, 2024).
+  Statisk side, ingen avhengigheter.
+</footer>
+
+<script>
+'use strict';
+
+/* ---------- DATA ---------- */
+
+const divisjoner = [
+  { id: "Recurve",                   site: "Recurve",                 pdf: "Recurve",      klassesett: "standard" },
+  { id: "Compound",                  site: "Compound",                pdf: "Compound",     klassesett: "standard" },
+  { id: "Barebow",                   site: "Barebow",                 pdf: "Barebow",      klassesett: "standard" },
+  { id: "Langbue",                   site: "Langbue",                 pdf: "Langbue",      klassesett: "standard" },
+  { id: "Tradisjonell",              site: "Tradisjonell",            pdf: "Tradisjonell", klassesett: "standard" },
+  { id: "Synshemmede",               site: "Synshemmede",             pdf: "W1 (VI)",      klassesett: "felles"   },
+  { id: "PsykiskUtviklingshemmet",   site: "PsykiskUtviklingshemmet", pdf: "OC",           klassesett: "felles"   }
+];
+
+const rundetyper = [
+  { id: 3,  navn: "Skandiarunde",   inneUte: "Ute",  piler: 90,  format: "3 avstander á 30 piler" },
+  { id: 4,  navn: "Norgesrunde",    inneUte: "Ute",  piler: 30,  format: "1 avstand á 30 piler" },
+  { id: 5,  navn: "1440-runde",     inneUte: "Ute",  piler: 144, format: "4 avstander á 36 piler" },
+  { id: 6,  navn: "½ 1440-runde",   inneUte: "Ute",  piler: 72,  format: "4 avstander á 18 piler" },
+  { id: 21, navn: "Norsk kortrunde",inneUte: "Ute",  piler: 90,  format: "3 avstander á 30 piler" },
+  { id: 26, navn: "720-runde",      inneUte: "Ute",  piler: 72,  format: "1 avstand á 72 piler" },
+  { id: 28, navn: "2 × 720-runde",  inneUte: "Ute",  piler: 144, format: "2 × 720 (samme avstand)" },
+  { id: 22, navn: "60 piler 18 m",  inneUte: "Inne", piler: 60,  format: "1 avstand" },
+  { id: 23, navn: "60 piler 25 m",  inneUte: "Inne", piler: 60,  format: "1 avstand" },
+  { id: 27, navn: "30 piler 18 m",  inneUte: "Inne", piler: 30,  format: "1 avstand" }
+];
+
+const standardKlasser = [
+  // Individuelt (10) — kjønn × alder
+  "Damer Senior", "Herrer Senior",
+  "Damer 50",     "Herrer 50",
+  "Damer U21",    "Herrer U21",
+  "Damer U18",    "Herrer U18",
+  "Jenter U16",   "Gutter U16",
+  // Mix2 / parlag (5) — én per aldersgruppe
+  "Mix2 Senior", "Mix2 50+", "Mix2 U21", "Mix2 U18", "Mix2 U16",
+  // Lag (10) — én per individuell klasse (kjønn × alder)
+  "Lag Damer Senior", "Lag Herrer Senior",
+  "Lag Damer 50",     "Lag Herrer 50",
+  "Lag Damer U21",    "Lag Herrer U21",
+  "Lag Damer U18",    "Lag Herrer U18",
+  "Lag Jenter U16",   "Lag Gutter U16"
+];
+const fellesKlasser = ["Felles", "Lag"];
+
+function klasserFor(divisjonId) {
+  const d = divisjoner.find(x => x.id === divisjonId);
+  return d && d.klassesett === "felles" ? fellesKlasser : standardKlasser;
+}
+
+const avstandstabell = [
+  { divisjon: "Recurve",      klasse: "Damer/Herrer Senior", inneAvstand: "18 m", inneSkive: "40 cm (trippel/1–10)", uteAvstand: "70 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Recurve",      klasse: "Damer/Herrer 50+",    inneAvstand: "18 m", inneSkive: "40 cm (trippel/1–10)", uteAvstand: "60 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Recurve",      klasse: "Damer/Herrer U21",    inneAvstand: "18 m", inneSkive: "40 cm (trippel/1–10)", uteAvstand: "70 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Recurve",      klasse: "Damer/Herrer U18",    inneAvstand: "18 m", inneSkive: "40 cm (trippel/1–10)", uteAvstand: "60 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Recurve",      klasse: "Jenter/Gutter U16",   inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "40 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Compound",     klasse: "Damer/Herrer Senior", inneAvstand: "18 m", inneSkive: "40 cm (trippel)",       uteAvstand: "50 m", uteSkive: "80 cm (5–10)" },
+  { divisjon: "Compound",     klasse: "Damer/Herrer 50+",    inneAvstand: "18 m", inneSkive: "40 cm (trippel)",       uteAvstand: "50 m", uteSkive: "80 cm (5–10)" },
+  { divisjon: "Compound",     klasse: "Damer/Herrer U21",    inneAvstand: "18 m", inneSkive: "40 cm (trippel)",       uteAvstand: "50 m", uteSkive: "80 cm (5–10)" },
+  { divisjon: "Compound",     klasse: "Damer/Herrer U18",    inneAvstand: "18 m", inneSkive: "40 cm (trippel)",       uteAvstand: "50 m", uteSkive: "80 cm (5–10)" },
+  { divisjon: "Compound",     klasse: "Jenter/Gutter U16",   inneAvstand: "18 m", inneSkive: "60 cm (trippel)",       uteAvstand: "30 m", uteSkive: "80 cm (5–10)" },
+  { divisjon: "Barebow",      klasse: "Damer/Herrer Senior", inneAvstand: "18 m", inneSkive: "40 cm (trippel/1–10)", uteAvstand: "50 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Barebow",      klasse: "Damer/Herrer 50+",    inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "50 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Barebow",      klasse: "Damer/Herrer U21",    inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "50 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Barebow",      klasse: "Damer/Herrer U18",    inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "40 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Barebow",      klasse: "Jenter/Gutter U16",   inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "25 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Langbue",      klasse: "Damer/Herrer Senior", inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Langbue",      klasse: "Damer/Herrer 50+",    inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Langbue",      klasse: "Damer/Herrer U21",    inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Langbue",      klasse: "Damer/Herrer U18",    inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Langbue",      klasse: "Jenter/Gutter U16",   inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "25 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Tradisjonell", klasse: "Damer/Herrer Senior", inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Tradisjonell", klasse: "Damer/Herrer 50+",    inneAvstand: "18 m", inneSkive: "40 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Tradisjonell", klasse: "Damer/Herrer U21",    inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Tradisjonell", klasse: "Damer/Herrer U18",    inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "30 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "Tradisjonell", klasse: "Jenter/Gutter U16",   inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "25 m", uteSkive: "122 cm (1–10)" },
+  { divisjon: "W1 (VI)",      klasse: "Synshemmede",         inneAvstand: "18 m", inneSkive: "60 cm (1–10)",          uteAvstand: "30 m", uteSkive: "80 cm (1–10)" },
+  { divisjon: "OC",           klasse: "Open class",          inneAvstand: "12 m", inneSkive: "60 cm (1–10)",          uteAvstand: "20 m", uteSkive: "122 cm (1–10)" }
+];
+
+/* ---------- LOOKUP HELPERS ---------- */
+
+function isFemale(klasse) {
+  return klasse.startsWith("Damer") || klasse.startsWith("Jenter");
+}
+function ageOf(klasse) {
+  if (klasse.includes("U16")) return "U16";
+  if (klasse.includes("U18")) return "U18";
+  if (klasse.includes("U21")) return "U21";
+  if (klasse.includes("50"))  return "50";
+  return "Senior";
+}
+function isAggregate(klasse) {
+  return klasse.startsWith("Mix2") || klasse.startsWith("Lag");
+}
+
+/* Sub-distance functions per multi-distance round.
+   Returns null when klasse is Mix2/Lag (= aggregert skår). */
+function distSkandia(div, klasse) {
+  if (div === "Synshemmede" || div === "PsykiskUtviklingshemmet") return [20];
+  if (isAggregate(klasse)) return null;
+  const u16 = ageOf(klasse) === "U16";
+  if (div === "Recurve" || div === "Compound") return u16 ? [40,30,20] : [60,50,40];
+  if (div === "Barebow") {
+    if (u16) return [25,20,15];
+    if (ageOf(klasse) === "U18") return [30,25,20];
+    return [40,30,20];
+  }
+  return u16 ? [25,20,15] : [30,25,20]; // Langbue, Tradisjonell
+}
+function distNorges(div, klasse) {
+  if (div === "Synshemmede" || div === "PsykiskUtviklingshemmet") return [20];
+  if (isAggregate(klasse)) return null;
+  const u16 = ageOf(klasse) === "U16";
+  if (div === "Recurve" || div === "Compound") return u16 ? [30] : [50];
+  if (div === "Barebow") return u16 ? [20] : [30];
+  return [25]; // Langbue & Tradisjonell — same for all ages
+}
+function dist1440(div, klasse) {
+  if (div === "Synshemmede" || div === "PsykiskUtviklingshemmet") return [20];
+  if (isAggregate(klasse)) return null;
+  const age = ageOf(klasse), fem = isFemale(klasse);
+  if (div === "Recurve") {
+    if (age === "U16") return [50,40,30,20];
+    if (age === "Senior" || age === "U21") return fem ? [90,70,60,50,30] : [90,70,50,30];
+    /* age 50 or U18 */                     return fem ? [60,50,40,30]    : [70,60,50,30];
+  }
+  if (div === "Compound") {
+    if (age === "U16") return [50,40,30,20];
+    if (age === "Senior" || age === "U21") return fem ? [70,60,50,30] : [90,70,50,30];
+    /* age 50 or U18 */                     return fem ? [60,50,40,30] : [70,60,50,30];
+  }
+  if (div === "Barebow") {
+    if (age === "U16") return [30,25,20,15];
+    if (age === "U18" && fem) return [40,30,25,20];
+    return [50,40,30,20];
+  }
+  /* Langbue, Tradisjonell */
+  if (age === "U16") return [30,25,20,15];
+  return [40,30,25,20];
+}
+function dist1440Half(div, klasse) {
+  // Avviker fra 1440 kun for Compound Damer Sen/U21 (har 90 m på ½ 1440 men ikke på 1440)
+  if (div === "Compound" && !isAggregate(klasse)) {
+    const age = ageOf(klasse), fem = isFemale(klasse);
+    if (age === "U16") return [50,40,30,20];
+    if (age === "Senior" || age === "U21") return fem ? [90,70,60,50,30] : [90,70,50,30];
+    return fem ? [60,50,40,30] : [70,60,50,30];
+  }
+  return dist1440(div, klasse);
+}
+function hasTotal90m(div, rundeid, klasse) {
+  if (isAggregate(klasse)) return false;
+  const age = ageOf(klasse);
+  if (age !== "Senior" && age !== "U21") return false;
+  if (!isFemale(klasse)) return false;
+  // Recurve: Total 90 m på 1440 (5)
+  if (div === "Recurve" && rundeid === 5) return true;
+  // Compound: Total 90 m på ½ 1440 (6)
+  if (div === "Compound" && rundeid === 6) return true;
+  return false;
+}
+function distKortrunde(div, klasse) {
+  if (div === "Synshemmede" || div === "PsykiskUtviklingshemmet") return [20];
+  if (isAggregate(klasse)) return null;
+  const u16 = ageOf(klasse) === "U16";
+  if (div === "Recurve" || div === "Compound") return u16 ? [35,25,20] : [50,35,25];
+  if (div === "Barebow") return u16 ? [25,20,15] : [35,25,20];
+  return u16 ? [25,20,15] : [30,25,20];
+}
+
+const subDistanceFn = {
+  3: distSkandia, 4: distNorges, 5: dist1440, 6: dist1440Half, 21: distKortrunde
+};
+
+function findPdfRow(div, klasse) {
+  if (div === "Synshemmede") return avstandstabell.find(r => r.divisjon === "W1 (VI)");
+  if (div === "PsykiskUtviklingshemmet") return avstandstabell.find(r => r.divisjon === "OC");
+  let pdfKlasse = null;
+  const age = ageOf(klasse);
+  if (age === "Senior")   pdfKlasse = "Damer/Herrer Senior";
+  else if (age === "50")  pdfKlasse = "Damer/Herrer 50+";
+  else if (age === "U21") pdfKlasse = "Damer/Herrer U21";
+  else if (age === "U18") pdfKlasse = "Damer/Herrer U18";
+  else if (age === "U16") pdfKlasse = "Jenter/Gutter U16";
+  return pdfKlasse ? avstandstabell.find(r => r.divisjon === div && r.klasse === pdfKlasse) : null;
+}
+
+function lookup(div, klasse, rundeid) {
+  const r = rundetyper.find(x => x.id === rundeid);
+  const pdf = findPdfRow(div, klasse);
+  let avstander, skive, source, note;
+
+  if (rundeid === 22 || rundeid === 27) {
+    avstander = ["18 m"];
+    skive = pdf ? pdf.inneSkive : "—";
+    source = "PDF Innendørs";
+    if (rundeid === 27) note = "Halvert antall piler (30) sammenlignet med rundeid 22.";
+    if (isAggregate(klasse)) note = (note ? note + " " : "") + "Lag-/Mix2-rekord = aggregert skår.";
+  } else if (rundeid === 23) {
+    avstander = ["25 m"];
+    skive = pdf ? pdf.inneSkive : "—";
+    source = "Site (ikke i PDF)";
+    note = "25 m innendørs er ikke en NM-disiplin i PDF-en, men registrerte rekorder finnes på site.";
+  } else if (rundeid === 26 || rundeid === 28) {
+    avstander = pdf ? [pdf.uteAvstand] : ["—"];
+    skive = pdf ? pdf.uteSkive : "—";
+    source = "PDF Skive/utendørs";
+    if (rundeid === 28) note = "2 × 720 = doble runder, samme avstand og skive som 720-runde.";
+    if (isAggregate(klasse)) note = (note ? note + " " : "") + "Lag-/Mix2-rekord = aggregert skår.";
+  } else if (subDistanceFn[rundeid]) {
+    const dists = subDistanceFn[rundeid](div, klasse);
+    if (!dists) {
+      avstander = ["(aggregert)"];
+      skive = pdf ? pdf.uteSkive : "—";
+      source = "Site (lagrekord)";
+      note = "Mix2 / Lag på multi-avstandsrunder lagres som total skår, ikke per delavstand.";
+    } else {
+      avstander = dists.map(d => d + " m");
+      skive = pdf ? pdf.uteSkive : "—";
+      source = "Site (delavstander) + PDF skive";
+      note = "Lengste delavstand tilsvarer PDF Skive/utendørs (NM-avstanden).";
+    }
+  }
+
+  return {
+    avstander: avstander || ["—"],
+    skive: skive || "—",
+    source: source || "—",
+    note: note || null,
+    runde: r,
+    pdf: pdf,
+    url: "https://rekord.bueskyting.no/rekord.php?rundeid=" + rundeid + "&divisjon=" + div
+  };
+}
+
+/* ---------- DOM HELPERS ---------- */
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    if (k === "class") e.className = attrs[k];
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    e.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+/* ---------- RENDERING ---------- */
+
+function renderDivisjoner() {
+  const tbody = document.querySelector("#divisjoner-table tbody");
+  clear(tbody);
+  for (const d of divisjoner) {
+    tbody.appendChild(el("tr", null,
+      el("td", null, el("code", null, d.site)),
+      el("td", null, d.pdf),
+      el("td", { class: "muted" }, d.klassesett === "felles" ? "Felles + Lag" : "Standard (10 ind. + 5 Mix2 + 5 Lag)")
+    ));
+  }
+}
+
+function renderRundetyper() {
+  const tbody = document.querySelector("#rundetyper-table tbody");
+  clear(tbody);
+  for (const r of rundetyper) {
+    const url = "https://rekord.bueskyting.no/rekord.php?rundeid=" + r.id + "&divisjon=Recurve";
+    tbody.appendChild(el("tr", null,
+      el("td", { class: "num" }, el("code", null, String(r.id))),
+      el("td", null, r.navn),
+      el("td", null, r.inneUte),
+      el("td", { class: "num" }, String(r.piler)),
+      el("td", { class: "muted" }, r.format),
+      el("td", null, el("a", { href: url, target: "_blank", rel: "noopener" }, "Recurve →"))
+    ));
+  }
+}
+
+function renderAvstandstabell() {
+  const tbody = document.querySelector("#avstandstabell-table tbody");
+  clear(tbody);
+  let prevDiv = null;
+  for (const r of avstandstabell) {
+    const tr = el("tr", null,
+      el("td", null, r.divisjon === prevDiv ? "" : el("strong", null, r.divisjon)),
+      el("td", null, r.klasse),
+      el("td", null, r.inneAvstand),
+      el("td", { class: "muted" }, r.inneSkive),
+      el("td", null, r.uteAvstand),
+      el("td", { class: "muted" }, r.uteSkive)
+    );
+    tbody.appendChild(tr);
+    prevDiv = r.divisjon;
+  }
+}
+
+function renderLookupForm() {
+  const selDiv = document.getElementById("sel-divisjon");
+  const selKls = document.getElementById("sel-klasse");
+  const selRid = document.getElementById("sel-rundeid");
+
+  for (const d of divisjoner) selDiv.appendChild(el("option", { value: d.id }, d.site));
+  for (const r of rundetyper) selRid.appendChild(el("option", { value: String(r.id) }, "(" + r.id + ") " + r.navn));
+
+  function repopulateKlasser() {
+    clear(selKls);
+    for (const k of klasserFor(selDiv.value)) selKls.appendChild(el("option", { value: k }, k));
+  }
+  selDiv.addEventListener("change", () => { repopulateKlasser(); renderLookupResult(); });
+  selKls.addEventListener("change", renderLookupResult);
+  selRid.addEventListener("change", renderLookupResult);
+
+  selDiv.value = "Recurve";
+  repopulateKlasser();
+  selKls.value = "Damer Senior";
+  selRid.value = "22";
+  renderLookupResult();
+}
+
+function renderLookupResult() {
+  const div = document.getElementById("sel-divisjon").value;
+  const klasse = document.getElementById("sel-klasse").value;
+  const rundeid = parseInt(document.getElementById("sel-rundeid").value, 10);
+  const out = document.getElementById("lookup-result");
+  clear(out);
+  if (!div || !klasse || !rundeid) return;
+
+  const r = lookup(div, klasse, rundeid);
+
+  function row(label, val) {
+    const valNode = typeof val === "string" ? el("div", { class: "val" }, val) : val;
+    out.appendChild(el("div", { class: "row" },
+      el("div", { class: "label" }, label),
+      valNode
+    ));
+  }
+
+  row("Runde", r.runde.navn + " (" + r.runde.inneUte.toLowerCase() + ", " + r.runde.piler + " piler)");
+  row("Divisjon × klasse", div + " · " + klasse);
+
+  const avstandPills = el("div", { class: "val" });
+  for (const a of r.avstander) avstandPills.appendChild(el("span", { class: "pill dist" }, a));
+  row("Avstand", avstandPills);
+
+  row("Skive", el("div", { class: "val" }, el("span", { class: "pill skive" }, r.skive)));
+  row("Kilde", el("div", { class: "val" }, el("span", { class: "pill source" }, r.source)));
+
+  if (r.pdf) {
+    const pdfTxt = "PDF: " + r.pdf.divisjon + " / " + r.pdf.klasse + " — inne " + r.pdf.inneAvstand + " · " + r.pdf.inneSkive + " | ute " + r.pdf.uteAvstand + " · " + r.pdf.uteSkive;
+    row("PDF-rad", el("div", { class: "val muted", style: "font-size:13px" }, pdfTxt));
+  } else {
+    row("PDF-rad", el("div", { class: "val muted" }, "(ingen direkte PDF-rad)"));
+  }
+
+  if (r.note) row("Merknad", el("div", { class: "val note" }, r.note));
+
+  row("URL", el("div", { class: "val" },
+    el("a", { class: "gourl", href: r.url, target: "_blank", rel: "noopener" }, r.url)
+  ));
+}
+
+/* ---------- ALLE REKORD-TYPER ---------- */
+
+function aspekterFor(rundeid, divisjon, klasse) {
+  // Returnerer liste { aspekt, avstand } per rekord-type for (rundeid, divisjon, klasse).
+  const isMix2 = klasse.startsWith("Mix2");
+  const isLagSplit = klasse.startsWith("Lag ");      // "Lag Damer Senior"
+  const isLagFelles = klasse === "Lag";              // spesialdiv. lagklasse
+
+  // Mix2 og Lag = aggregert lagskår: én rekord per (klasse × runde)
+  if (isMix2 || isLagSplit || isLagFelles) {
+    // Avstand for visning: bruk underliggende individuelle klasse sine delavstander
+    let avstand = "—";
+    const subFn = subDistanceFn[rundeid];
+    if (subFn) {
+      // Finn en representativ underliggende klasse for å hente avstand-summary
+      let underlying = klasse;
+      if (isMix2) {
+        const age = klasse.substring(5).replace("+", ""); // "Mix2 50+" -> "50"
+        underlying = age === "U16" ? "Gutter U16" : "Herrer " + age;
+      } else if (isLagSplit) {
+        underlying = klasse.substring(4); // "Lag Damer Senior" -> "Damer Senior"
+      } else if (isLagFelles) {
+        underlying = "Felles";
+      }
+      const dists = subFn(divisjon, underlying);
+      if (dists) avstand = dists.length === 1 ? dists[0] + " m" : dists.join("/") + " m";
+    } else if (rundeid === 22 || rundeid === 27) {
+      avstand = "18 m";
+    } else if (rundeid === 23) {
+      avstand = "25 m";
+    } else if (rundeid === 26 || rundeid === 28) {
+      const pdf = findPdfRow(divisjon, klasse);
+      avstand = pdf ? pdf.uteAvstand : "—";
+    }
+    return [{ aspekt: "Total (lagskår)", avstand }];
+  }
+
+  // Individuell klasse (eller Felles for spesialdivisjoner)
+  const subFn = subDistanceFn[rundeid];
+  let dists;
+  if (subFn) {
+    dists = subFn(divisjon, klasse);
+  } else if (rundeid === 22 || rundeid === 27) {
+    dists = [18];
+  } else if (rundeid === 23) {
+    dists = [25];
+  } else if (rundeid === 26 || rundeid === 28) {
+    const pdf = findPdfRow(divisjon, klasse);
+    dists = pdf ? [parseInt(pdf.uteAvstand)] : [];
+  }
+  if (!dists || dists.length === 0) return [];
+
+  const aspekter = [];
+  if (dists.length === 1) {
+    // Enkelt-avstandsrunde: én rekord (Total = den eneste avstanden)
+    aspekter.push({ aspekt: "Total", avstand: dists[0] + " m" });
+  } else {
+    for (const d of dists) aspekter.push({ aspekt: d + " m", avstand: d + " m" });
+    aspekter.push({ aspekt: "Total", avstand: dists.join("/") + " m" });
+    if (hasTotal90m(divisjon, rundeid, klasse)) {
+      aspekter.push({ aspekt: "Total 90 m", avstand: "90 m" });
+    }
+  }
+  return aspekter;
+}
+
+function genererAlleRekordTyper() {
+  const out = [];
+  for (const div of divisjoner) {
+    for (const rt of rundetyper) {
+      for (const klasse of klasserFor(div.id)) {
+        const pdf = findPdfRow(div.id, klasse);
+        const skive = pdf ? (rt.inneUte === "Inne" ? pdf.inneSkive : pdf.uteSkive) : "—";
+        const url = "https://rekord.bueskyting.no/rekord.php?rundeid=" + rt.id + "&divisjon=" + div.id;
+        for (const a of aspekterFor(rt.id, div.id, klasse)) {
+          out.push({
+            divisjon: div.site,
+            klasse,
+            rundeid: rt.id,
+            rundeNavn: rt.navn,
+            inneUte: rt.inneUte,
+            aspekt: a.aspekt,
+            avstand: a.avstand,
+            skive,
+            url
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function klasseGruppe(klasse) {
+  if (klasse === "Felles") return "felles";
+  if (klasse === "Lag") return "lag";
+  if (klasse.startsWith("Mix2")) return "mix2";
+  if (klasse.startsWith("Lag ")) return "lag";
+  return "ind";
+}
+
+const ALLE_REKORDER = []; // fylles ved init
+
+function renderAlleSummary() {
+  const wrap = document.getElementById("alle-summary");
+  clear(wrap);
+  const total = ALLE_REKORDER.length;
+  const ind   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "ind").length;
+  const mix2  = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "mix2").length;
+  const lag   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "lag").length;
+  const felles= ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "felles").length;
+  function card(label, big, sub) {
+    return el("div", { class: "card" },
+      el("strong", null, label),
+      el("div", { class: "big" }, String(big)),
+      sub ? document.createTextNode(sub) : null
+    );
+  }
+  wrap.appendChild(card("Totalt", total, "rekord-typer"));
+  wrap.appendChild(card("Individuelt", ind, "per kjønn × alder"));
+  wrap.appendChild(card("Mix2", mix2, "parlag-rekorder"));
+  wrap.appendChild(card("Lag", lag, "3-skytter lagrekorder"));
+  wrap.appendChild(card("Felles (W1/OC)", felles, "spesialdivisjoner"));
+}
+
+function renderAlleFilters() {
+  const fDiv = document.getElementById("f-divisjon");
+  const fRid = document.getElementById("f-rundeid");
+  for (const d of divisjoner) fDiv.appendChild(el("option", { value: d.id }, d.site));
+  for (const r of rundetyper) fRid.appendChild(el("option", { value: String(r.id) }, "(" + r.id + ") " + r.navn));
+  for (const id of ["f-divisjon", "f-rundeid", "f-gruppe", "f-sok"]) {
+    document.getElementById(id).addEventListener("input", renderAlleTable);
+    document.getElementById(id).addEventListener("change", renderAlleTable);
+  }
+  document.getElementById("alle-csv").addEventListener("click", lastNedCsv);
+}
+
+function filtrertListe() {
+  const fDiv = document.getElementById("f-divisjon").value;
+  const fRid = document.getElementById("f-rundeid").value;
+  const fGr  = document.getElementById("f-gruppe").value;
+  const fSok = (document.getElementById("f-sok").value || "").trim().toLowerCase();
+  return ALLE_REKORDER.filter(r => {
+    if (fDiv && r.divisjon !== fDiv) {
+      // try id-match too (since divisjoner.site may differ from URL slug)
+      const div = divisjoner.find(d => d.site === r.divisjon);
+      if (!div || div.id !== fDiv) return false;
+    }
+    if (fRid && String(r.rundeid) !== fRid) return false;
+    if (fGr && klasseGruppe(r.klasse) !== fGr) return false;
+    if (fSok && !r.klasse.toLowerCase().includes(fSok)) return false;
+    return true;
+  });
+}
+
+function renderAlleTable() {
+  const list = filtrertListe();
+  const tbody = document.querySelector("#alle-table tbody");
+  clear(tbody);
+  // Begrens visning til de første 500 — CSV-eksport gir hele listen
+  const VIS_MAKS = 500;
+  const slice = list.slice(0, VIS_MAKS);
+  for (let i = 0; i < slice.length; i++) {
+    const r = slice[i];
+    tbody.appendChild(el("tr", null,
+      el("td", { class: "num muted" }, String(i + 1)),
+      el("td", null, r.divisjon),
+      el("td", null, r.klasse),
+      el("td", null, r.rundeNavn + " (" + r.inneUte.toLowerCase() + ")"),
+      el("td", null, r.aspekt),
+      el("td", null, r.avstand),
+      el("td", { class: "muted" }, r.skive),
+      el("td", null, el("a", { href: r.url, target: "_blank", rel: "noopener", title: "Åpne rekord-side" }, "→"))
+    ));
+  }
+  const cnt = document.getElementById("alle-count");
+  clear(cnt);
+  const note = list.length > VIS_MAKS ? " (viser " + VIS_MAKS + " første — last ned CSV for full liste)" : "";
+  cnt.appendChild(document.createTextNode("Viser " + Math.min(list.length, VIS_MAKS) + " av " + ALLE_REKORDER.length + " rekord-typer" + note));
+}
+
+function lastNedCsv() {
+  const list = filtrertListe();
+  const head = ["divisjon","klasse","rundeid","rundenavn","inne_ute","aspekt","avstand","skive","url"];
+  const esc = v => /[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  const lines = [head.join(",")];
+  for (const r of list) {
+    lines.push([r.divisjon, r.klasse, r.rundeid, r.rundeNavn, r.inneUte, r.aspekt, r.avstand, r.skive, r.url].map(esc).join(","));
+  }
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "rekord-typer.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ---------- TABS ---------- */
+
+function activateTab(name) {
+  for (const b of document.querySelectorAll("#tabnav button")) b.classList.toggle("active", b.dataset.tab === name);
+  for (const s of document.querySelectorAll("section.tab")) s.classList.toggle("active", s.id === name);
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderDivisjoner();
+  renderRundetyper();
+  renderAvstandstabell();
+  renderLookupForm();
+
+  // Build full record list once and render the "Alle rekord-typer" tab
+  ALLE_REKORDER.push(...genererAlleRekordTyper());
+  renderAlleSummary();
+  renderAlleFilters();
+  renderAlleTable();
+
+  for (const b of document.querySelectorAll("#tabnav button")) {
+    b.addEventListener("click", () => activateTab(b.dataset.tab));
+  }
+  for (const a of document.querySelectorAll('a[data-go]')) {
+    a.addEventListener("click", e => { e.preventDefault(); activateTab(a.dataset.go); });
+  }
+});
+</script>
+</body>
+</html>
