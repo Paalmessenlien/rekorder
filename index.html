@@ -249,6 +249,13 @@
           <option value="felles">Felles (W1/OC)</option>
         </select>
       </label>
+      <label>Status
+        <select id="f-status">
+          <option value="">Alle</option>
+          <option value="tatt">Tatt</option>
+          <option value="ledig">Ledig (ikke registrert)</option>
+        </select>
+      </label>
       <label>Søk i klasse
         <input id="f-sok" type="search" placeholder="f.eks. Senior, U18, …">
       </label>
@@ -260,7 +267,7 @@
     </div>
 
     <table id="alle-table">
-      <thead><tr><th class="num">#</th><th>Divisjon</th><th>Klasse</th><th>Rundetype</th><th>Aspekt</th><th>Avstand</th><th>Skive</th><th></th></tr></thead>
+      <thead><tr><th class="num">#</th><th>Divisjon</th><th>Klasse</th><th>Rundetype</th><th>Aspekt</th><th>Avstand</th><th>Skive</th><th>Status</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
     <p class="muted" style="font-size:13px">
@@ -813,14 +820,51 @@ function klasseGruppe(klasse) {
 
 const ALLE_REKORDER = []; // fylles ved init
 
+/* Canonical-nøkkel for å matche katalog mot skrapet data.
+   Skrapet data bruker:
+     - distanse-aspekt uten mellomrom: "70m", "18m"
+     - "Total" for multi-distanse-runder
+     - "Lag" for lag-rekord under en individuell klasse (eller Mix2)
+   Katalog bruker:
+     - distanse med mellomrom: "70 m", "18 m"
+     - "Total" for runder med mer enn én delavstand
+     - "Total (lagskår)" + egen "Lag X"-klasse for lagrekord
+     - "Total" + avstand for enkelt-distansrunder (skrapet bruker selve avstanden)
+*/
+function canonKey(divisjon, klasse, rundeid, aspekt) {
+  let a = String(aspekt).trim();
+  a = a.replace(/(\d+)\s+m\b/g, "$1m");          // "70 m" → "70m", "Total 90 m" → "Total 90m"
+  if (a === "Total (lagskår)") a = "Lag";
+  let k = klasse;
+  if (k.startsWith("Lag ")) { k = k.substring(4); a = "Lag"; }
+  else if (k === "Lag")     { k = "Felles";       a = "Lag"; }
+  else if (k.startsWith("Mix2")) { a = "Lag"; }
+  return divisjon + "|" + k + "|" + rundeid + "|" + a;
+}
+const SINGLE_DIST_RUNDER = new Set([4, 22, 23, 26, 27, 28]);
+function catalogCanonKey(catRow) {
+  let aspekt = catRow.aspekt;
+  // For single-distance runder, "Total" i katalog = avstanden i skrapet data
+  if (aspekt === "Total" && SINGLE_DIST_RUNDER.has(catRow.rundeid)) {
+    aspekt = catRow.avstand; // "18 m" — canonKey strip mellomrom
+  }
+  return canonKey(catRow.divisjon, catRow.klasse, catRow.rundeid, aspekt);
+}
+function scrapedCanonKey(scRow) {
+  return canonKey(scRow.divisjon, scRow.klasse, parseInt(scRow.rundeid, 10), scRow.aspekt);
+}
+
+/* Indeks: scraped key → row, slik at vi kan slå opp innehaver per katalograd */
+let SCRAPED_INDEX = new Map();
+function rebuildScrapedIndex() {
+  SCRAPED_INDEX = new Map();
+  for (const r of REKORDER) SCRAPED_INDEX.set(scrapedCanonKey(r), r);
+}
+
 function renderAlleSummary() {
   const wrap = document.getElementById("alle-summary");
   clear(wrap);
   const total = ALLE_REKORDER.length;
-  const ind   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "ind").length;
-  const mix2  = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "mix2").length;
-  const lag   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "lag").length;
-  const felles= ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "felles").length;
   function card(label, big, sub) {
     return el("div", { class: "card" },
       el("strong", null, label),
@@ -829,9 +873,25 @@ function renderAlleSummary() {
     );
   }
   wrap.appendChild(card("Totalt", total, "rekord-typer"));
+  if (SCRAPED_INDEX.size > 0) {
+    let tatt = 0;
+    for (const r of ALLE_REKORDER) {
+      if (SCRAPED_INDEX.has(catalogCanonKey(r))) tatt++;
+    }
+    const ledig = total - tatt;
+    const pct = total ? ((tatt / total) * 100).toFixed(0) : "0";
+    wrap.appendChild(card("Tatt", tatt, pct + " % av mulige"));
+    wrap.appendChild(card("Ledig", ledig, "ikke registrert ennå"));
+  } else {
+    wrap.appendChild(card("Status", "—", "laster rekorder.csv …"));
+  }
+  const ind   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "ind").length;
+  const mix2  = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "mix2").length;
+  const lag   = ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "lag").length;
+  const felles= ALLE_REKORDER.filter(r => klasseGruppe(r.klasse) === "felles").length;
   wrap.appendChild(card("Individuelt", ind, "per kjønn × alder"));
-  wrap.appendChild(card("Mix2", mix2, "parlag-rekorder"));
-  wrap.appendChild(card("Lag", lag, "3-skytter lagrekorder"));
+  wrap.appendChild(card("Mix2", mix2, "parlag"));
+  wrap.appendChild(card("Lag", lag, "3-skytter lag"));
   wrap.appendChild(card("Felles (W1/OC)", felles, "spesialdivisjoner"));
 }
 
@@ -840,7 +900,7 @@ function renderAlleFilters() {
   const fRid = document.getElementById("f-rundeid");
   for (const d of divisjoner) fDiv.appendChild(el("option", { value: d.id }, d.site));
   for (const r of rundetyper) fRid.appendChild(el("option", { value: String(r.id) }, "(" + r.id + ") " + r.navn));
-  for (const id of ["f-divisjon", "f-rundeid", "f-gruppe", "f-sok"]) {
+  for (const id of ["f-divisjon", "f-rundeid", "f-gruppe", "f-status", "f-sok"]) {
     document.getElementById(id).addEventListener("input", renderAlleTable);
     document.getElementById(id).addEventListener("change", renderAlleTable);
   }
@@ -851,15 +911,20 @@ function filtrertListe() {
   const fDiv = document.getElementById("f-divisjon").value;
   const fRid = document.getElementById("f-rundeid").value;
   const fGr  = document.getElementById("f-gruppe").value;
+  const fSt  = document.getElementById("f-status").value;
   const fSok = (document.getElementById("f-sok").value || "").trim().toLowerCase();
   return ALLE_REKORDER.filter(r => {
     if (fDiv && r.divisjon !== fDiv) {
-      // try id-match too (since divisjoner.site may differ from URL slug)
       const div = divisjoner.find(d => d.site === r.divisjon);
       if (!div || div.id !== fDiv) return false;
     }
     if (fRid && String(r.rundeid) !== fRid) return false;
     if (fGr && klasseGruppe(r.klasse) !== fGr) return false;
+    if (fSt) {
+      const tatt = SCRAPED_INDEX.has(catalogCanonKey(r));
+      if (fSt === "tatt"  && !tatt) return false;
+      if (fSt === "ledig" &&  tatt) return false;
+    }
     if (fSok && !r.klasse.toLowerCase().includes(fSok)) return false;
     return true;
   });
@@ -874,6 +939,23 @@ function renderAlleTable() {
   const slice = list.slice(0, VIS_MAKS);
   for (let i = 0; i < slice.length; i++) {
     const r = slice[i];
+    const sc = SCRAPED_INDEX.get(catalogCanonKey(r));
+    let statusCell;
+    if (SCRAPED_INDEX.size === 0) {
+      statusCell = el("td", { class: "muted", style: "font-size:13px" }, "—");
+    } else if (sc) {
+      const who = sc.navn || sc.klubb || "—";
+      statusCell = el("td", { style: "font-size:13px" },
+        el("span", { class: "pill source", style: "background:#e3f3e6;color:#2e7d32;padding:2px 8px;border-radius:999px;font-size:12px" }, "Tatt"),
+        el("br"),
+        el("span", null, sc.score + " · "),
+        el("span", { class: "muted" }, who + (sc.dato ? " (" + sc.dato + ")" : ""))
+      );
+    } else {
+      statusCell = el("td", { style: "font-size:13px" },
+        el("span", { class: "pill", style: "background:#fdecea;color:#b22a2a;padding:2px 8px;border-radius:999px;font-size:12px" }, "Ledig")
+      );
+    }
     tbody.appendChild(el("tr", null,
       el("td", { class: "num muted" }, String(i + 1)),
       el("td", null, r.divisjon),
@@ -882,6 +964,7 @@ function renderAlleTable() {
       el("td", null, r.aspekt),
       el("td", null, r.avstand),
       el("td", { class: "muted" }, r.skive),
+      statusCell,
       el("td", null, el("a", { href: r.url, target: "_blank", rel: "noopener", title: "Åpne rekord-side" }, "→"))
     ));
   }
@@ -893,11 +976,16 @@ function renderAlleTable() {
 
 function lastNedCsv() {
   const list = filtrertListe();
-  const head = ["divisjon","klasse","rundeid","rundenavn","inne_ute","aspekt","avstand","skive","url"];
-  const esc = v => /[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  const head = ["divisjon","klasse","rundeid","rundenavn","inne_ute","aspekt","avstand","skive","status","gjeldende_score","gjeldende_innehaver","gjeldende_dato","url"];
+  const esc = v => /[",\n]/.test(String(v ?? "")) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v ?? "");
   const lines = [head.join(",")];
   for (const r of list) {
-    lines.push([r.divisjon, r.klasse, r.rundeid, r.rundeNavn, r.inneUte, r.aspekt, r.avstand, r.skive, r.url].map(esc).join(","));
+    const sc = SCRAPED_INDEX.get(catalogCanonKey(r));
+    const status = SCRAPED_INDEX.size === 0 ? "" : (sc ? "tatt" : "ledig");
+    const score = sc ? sc.score : "";
+    const innehaver = sc ? (sc.navn || sc.klubb || "") : "";
+    const dato = sc ? sc.dato : "";
+    lines.push([r.divisjon, r.klasse, r.rundeid, r.rundeNavn, r.inneUte, r.aspekt, r.avstand, r.skive, status, score, innehaver, dato, r.url].map(esc).join(","));
   }
   const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
@@ -956,8 +1044,12 @@ async function lastRekorder() {
     if (metaResp && metaResp.ok) {
       try { REKORDER_META = await metaResp.json(); } catch (e) { /* ignore */ }
     }
+    rebuildScrapedIndex();
     renderRekorderSummary();
     renderRekorderTable();
+    // Oppdater "Alle rekord-typer"-fanen med status-info
+    renderAlleSummary();
+    renderAlleTable();
     clear(status);
   } catch (e) {
     clear(status);
