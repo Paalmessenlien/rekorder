@@ -135,6 +135,7 @@
   <button data-tab="klasser">Klasser</button>
   <button data-tab="avstandstabell">Avstandstabell</button>
   <button data-tab="alle">Alle rekord-typer</button>
+  <button data-tab="rekorder">Rekorder</button>
   <button data-tab="slaopp">Slå opp</button>
 </nav>
 
@@ -266,6 +267,55 @@
       Notater: Lag er modellert kjønnsdelt (10 lagklasser per standard divisjon). På <code>rundeid=22</code> publiseres lagrekorder ofte kombinert (5 klasser per divisjon) — radene her er en øvre grense.
       Mix2 og Lag på multi-avstandsrunder er ren lagskår (ingen delavstands-rekorder).
     </p>
+  </section>
+
+  <section id="rekorder" class="tab">
+    <h2>Rekorder</h2>
+    <p class="lead">Gjeldende rekorder hentet fra <a href="https://rekord.bueskyting.no/" target="_blank" rel="noopener">rekord.bueskyting.no</a> via en enkel scraper. Oppdateres ukentlig via GitHub Action.</p>
+
+    <div class="cards" id="rekorder-summary"></div>
+
+    <form id="rekorder-filter" autocomplete="off">
+      <label>Divisjon
+        <select id="rf-divisjon"><option value="">Alle</option></select>
+      </label>
+      <label>Rundetype
+        <select id="rf-rundeid"><option value="">Alle</option></select>
+      </label>
+      <label>Klasse-gruppe
+        <select id="rf-gruppe">
+          <option value="">Alle</option>
+          <option value="ind">Individuelt</option>
+          <option value="lag">Lag</option>
+          <option value="mix2">Mix2</option>
+          <option value="felles">Felles (W1/OC)</option>
+        </select>
+      </label>
+      <label>Søk
+        <input id="rf-sok" type="search" placeholder="navn, klubb, klasse, …">
+      </label>
+    </form>
+
+    <div style="display:flex; align-items:center; gap:14px; margin: 4px 0 12px;">
+      <span id="rekorder-count" class="muted" style="font-size:13px;"></span>
+      <button id="rekorder-csv" type="button" style="margin-left:auto; font:inherit; padding:8px 14px; border:1px solid var(--line); border-radius:4px; background:var(--surface); cursor:pointer;">Last ned CSV</button>
+    </div>
+
+    <table id="rekorder-table">
+      <thead><tr>
+        <th class="num">#</th>
+        <th>Divisjon</th>
+        <th>Klasse</th>
+        <th>Rundetype</th>
+        <th>Aspekt</th>
+        <th class="num">Score</th>
+        <th>Innehaver / lag</th>
+        <th>Dato</th>
+        <th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="muted" style="font-size:13px" id="rekorder-status"></p>
   </section>
 
   <section id="slaopp" class="tab">
@@ -859,6 +909,182 @@ function lastNedCsv() {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
+/* ---------- REKORDER (scraped) ---------- */
+
+let REKORDER = [];   // fylles via fetch
+let REKORDER_META = null;
+
+function parseCsv(text) {
+  // Stripper UTF-8 BOM hvis tilstede
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = [];
+  let field = "", row = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { field += '"'; i++; continue; }
+      if (c === '"') { inQ = false; continue; }
+      field += c;
+    } else {
+      if (c === '"') { inQ = true; continue; }
+      if (c === ",") { row.push(field); field = ""; continue; }
+      if (c === "\r") continue;
+      if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; continue; }
+      field += c;
+    }
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const head = rows[0];
+  return rows.slice(1).filter(r => r.length === head.length).map(r => {
+    const o = {};
+    for (let i = 0; i < head.length; i++) o[head[i]] = r[i];
+    return o;
+  });
+}
+
+async function lastRekorder() {
+  const status = document.getElementById("rekorder-status");
+  try {
+    const [csvResp, metaResp] = await Promise.all([
+      fetch("rekorder.csv", { cache: "no-store" }),
+      fetch("rekorder-meta.json", { cache: "no-store" }).catch(() => null)
+    ]);
+    if (!csvResp.ok) throw new Error("HTTP " + csvResp.status + " for rekorder.csv");
+    const text = await csvResp.text();
+    REKORDER = parseCsv(text);
+    if (metaResp && metaResp.ok) {
+      try { REKORDER_META = await metaResp.json(); } catch (e) { /* ignore */ }
+    }
+    renderRekorderSummary();
+    renderRekorderTable();
+    clear(status);
+  } catch (e) {
+    clear(status);
+    status.appendChild(document.createTextNode(
+      "Kunne ikke laste rekorder.csv: " + e.message +
+      ". Sjekk at filen ligger ved siden av index.html (eller server siden via en lokal HTTP-server)."
+    ));
+  }
+}
+
+function renderRekorderSummary() {
+  const wrap = document.getElementById("rekorder-summary");
+  clear(wrap);
+  function card(label, big, sub) {
+    return el("div", { class: "card" },
+      el("strong", null, label),
+      el("div", { class: "big" }, String(big)),
+      sub ? document.createTextNode(sub) : null
+    );
+  }
+  wrap.appendChild(card("Rekorder", REKORDER.length, "registrerte"));
+  if (REKORDER_META) {
+    const dt = REKORDER_META.scraped_at ? REKORDER_META.scraped_at.replace("T", " ").replace("Z", " UTC") : "—";
+    wrap.appendChild(card("Sist oppdatert", dt, ""));
+  }
+  // Top scorers per divisjon — show divisjon counts
+  const byDiv = {};
+  for (const r of REKORDER) byDiv[r.divisjon] = (byDiv[r.divisjon] || 0) + 1;
+  const topDiv = Object.entries(byDiv).sort((a,b) => b[1] - a[1])[0];
+  if (topDiv) wrap.appendChild(card("Mest aktive divisjon", topDiv[0], topDiv[1] + " rekorder"));
+  wrap.appendChild(card("Av 2000 mulige", REKORDER.length + " / 2000", "rekord-typer fylt"));
+}
+
+function rekorderKlasseGruppe(klasse) {
+  if (klasse === "Felles") return "felles";
+  if (klasse === "Lag") return "lag"; // spesialdiv. lagklasse
+  if (klasse.startsWith("Mix2")) return "mix2";
+  if (klasse.startsWith("Lag ")) return "lag";
+  return "ind";
+}
+
+function renderRekorderFilters() {
+  const fDiv = document.getElementById("rf-divisjon");
+  const fRid = document.getElementById("rf-rundeid");
+  for (const d of divisjoner) fDiv.appendChild(el("option", { value: d.id }, d.site));
+  for (const r of rundetyper) fRid.appendChild(el("option", { value: String(r.id) }, "(" + r.id + ") " + r.navn));
+  for (const id of ["rf-divisjon", "rf-rundeid", "rf-gruppe", "rf-sok"]) {
+    document.getElementById(id).addEventListener("input", renderRekorderTable);
+    document.getElementById(id).addEventListener("change", renderRekorderTable);
+  }
+  document.getElementById("rekorder-csv").addEventListener("click", lastNedRekorderCsv);
+}
+
+function filtrertRekorder() {
+  const fDiv = document.getElementById("rf-divisjon").value;
+  const fRid = document.getElementById("rf-rundeid").value;
+  const fGr  = document.getElementById("rf-gruppe").value;
+  const fSok = (document.getElementById("rf-sok").value || "").trim().toLowerCase();
+  return REKORDER.filter(r => {
+    if (fDiv && r.divisjon !== fDiv) return false;
+    if (fRid && String(r.rundeid) !== fRid) return false;
+    if (fGr) {
+      // Lag-klasser i CSV-en er fortsatt med kjønn-format ("Lag" for spesialdiv eller individuelle aspekt = "Lag")
+      // Men i CSV er hver Lag-rekord faktisk individuell klasse med aspekt = "Lag"
+      const grp = rekorderKlasseGruppe(r.klasse);
+      // Behandle aspekt = "Lag" som lag-rekord uavhengig av klasse
+      const isLagAspekt = r.aspekt === "Lag";
+      if (fGr === "lag" && !(grp === "lag" || isLagAspekt)) return false;
+      if (fGr === "ind" && (isLagAspekt || grp !== "ind")) return false;
+      if (fGr === "mix2" && grp !== "mix2") return false;
+      if (fGr === "felles" && grp !== "felles") return false;
+    }
+    if (fSok) {
+      const hay = (r.divisjon + " " + r.klasse + " " + r.rundenavn + " " + r.aspekt + " " + r.navn + " " + r.klubb + " " + r.medlemmer).toLowerCase();
+      if (!hay.includes(fSok)) return false;
+    }
+    return true;
+  });
+}
+
+function renderRekorderTable() {
+  const list = filtrertRekorder();
+  const tbody = document.querySelector("#rekorder-table tbody");
+  clear(tbody);
+  const VIS_MAKS = 500;
+  const slice = list.slice(0, VIS_MAKS);
+  for (let i = 0; i < slice.length; i++) {
+    const r = slice[i];
+    const lagInfo = r.medlemmer ? r.klubb + " — v/" + r.medlemmer : (r.aspekt === "Lag" ? r.klubb : "");
+    const innehaver = r.navn ? el("span", null, r.navn, el("br"), el("span", { class: "muted" }, r.klubb)) :
+                      lagInfo ? el("span", null, r.klubb, r.medlemmer ? el("br") : null,
+                                   r.medlemmer ? el("span", { class: "muted", style: "font-size:12px" }, "v/" + r.medlemmer) : null) :
+                      el("span", { class: "muted" }, "—");
+    tbody.appendChild(el("tr", null,
+      el("td", { class: "num muted" }, String(i + 1)),
+      el("td", null, r.divisjon),
+      el("td", null, r.klasse),
+      el("td", null, r.rundenavn),
+      el("td", null, r.aspekt),
+      el("td", { class: "num" }, r.score),
+      el("td", null, innehaver),
+      el("td", { class: "muted", style: "font-size:13px" }, r.dato || "—"),
+      el("td", null, el("a", { href: r.url, target: "_blank", rel: "noopener", title: "Åpne kildeside" }, "→"))
+    ));
+  }
+  const cnt = document.getElementById("rekorder-count");
+  clear(cnt);
+  const note = list.length > VIS_MAKS ? " (viser " + VIS_MAKS + " første — last ned CSV for full liste)" : "";
+  cnt.appendChild(document.createTextNode("Viser " + Math.min(list.length, VIS_MAKS) + " av " + REKORDER.length + " rekorder" + note));
+}
+
+function lastNedRekorderCsv() {
+  const list = filtrertRekorder();
+  const head = ["divisjon","klasse","rundeid","rundenavn","aspekt","score","navn","klubb","medlemmer","dato","url"];
+  const esc = v => /[",\n]/.test(String(v ?? "")) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v ?? "");
+  const lines = [head.join(",")];
+  for (const r of list) lines.push(head.map(k => esc(r[k])).join(","));
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "rekorder.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
 /* ---------- TABS ---------- */
 
 function activateTab(name) {
@@ -878,6 +1104,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAlleSummary();
   renderAlleFilters();
   renderAlleTable();
+
+  // "Rekorder" tab — fetch the scraped CSV
+  renderRekorderFilters();
+  lastRekorder();
 
   for (const b of document.querySelectorAll("#tabnav button")) {
     b.addEventListener("click", () => activateTab(b.dataset.tab));

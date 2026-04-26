@@ -1,2 +1,4 @@
 .claude/
 .~lock.*
+__pycache__/
+*.pyc

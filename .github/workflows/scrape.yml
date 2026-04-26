@@ -1,0 +1,44 @@
+name: Scrape rekorder
+
+on:
+  schedule:
+    # Søndag kl 04:00 UTC = 05:00 (vinter) / 06:00 (sommer) norsk tid
+    - cron: "0 4 * * 0"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrape-rekorder
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run scraper
+        run: python3 scrape.py
+
+      - name: Commit endringer (om noen)
+        env:
+          ISO_DATE: ${{ github.run_started_at }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet rekorder.csv rekorder-meta.json; then
+            echo "Ingen endringer i rekorder.csv — hopper over commit."
+            exit 0
+          fi
+          git add rekorder.csv rekorder-meta.json
+          DATE_ONLY="${ISO_DATE%%T*}"
+          git commit -m "chore: oppdater rekorder.csv ($DATE_ONLY)"
+          git push
