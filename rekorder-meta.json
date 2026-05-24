@@ -1,13 +1,13 @@
 {
-  "scraped_at": "2026-05-17T05:25:17Z",
-  "total": 1365,
+  "scraped_at": "2026-05-24T05:28:04Z",
+  "total": 1368,
   "by_divisjon": {
-    "Barebow": 268,
+    "Barebow": 269,
     "Compound": 313,
-    "Langbue": 186,
+    "Langbue": 187,
     "Recurve": 351,
     "Synshemmede": 1,
-    "Tradisjonell": 246
+    "Tradisjonell": 247
   },
   "source": "https://rekord.bueskyting.no/"
 }
